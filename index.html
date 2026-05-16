@@ -10780,6 +10780,20 @@
       }).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     }
 
+    function getFuelDeliveryDateForDispatch(dispatchDate, deliveries = getRecords('fuel_delivery')) {
+      const sortedDeliveries = [...deliveries].sort((a, b) => new Date(a.date) - new Date(b.date));
+      if (!sortedDeliveries.length) return '';
+      const dispatchTime = new Date(dispatchDate).getTime();
+      const matchingDelivery = sortedDeliveries
+        .slice()
+        .reverse()
+        .find(r => {
+          const deliveryTime = new Date(r.date).getTime();
+          return Number.isFinite(deliveryTime) && Number.isFinite(dispatchTime) && deliveryTime <= dispatchTime;
+        });
+      return (matchingDelivery || sortedDeliveries[sortedDeliveries.length - 1]).date || '';
+    }
+
     function renderFuelDispatch(container) {
       const totals = getFuelTotals();
       const filtered = getFilteredFuelDispatches();
@@ -10925,6 +10939,7 @@
                   <thead>
                     <tr>
                       <th>Fecha</th>
+                      <th>Fecha que llego el gasol</th>
                       <th>Nombre</th>
                       <th>Horometro</th>
                       <th>Placa</th>
@@ -10936,10 +10951,11 @@
                   </thead>
                   <tbody>
                     ${filtered.length === 0 ? `
-                      <tr><td colspan="8" class="text-center py-12 text-slate-500">No hay despachos con esos filtros</td></tr>
+                      <tr><td colspan="9" class="text-center py-12 text-slate-500">No hay despachos con esos filtros</td></tr>
                     ` : filtered.map(r => `
                       <tr>
                         <td class="text-slate-400 text-sm">${fmt.dateTime(r.date)}</td>
+                        <td class="text-blue-300 text-sm font-medium">${getFuelDeliveryDateForDispatch(r.date, totals.deliveries) ? fmt.date(getFuelDeliveryDateForDispatch(r.date, totals.deliveries)) : '-'}</td>
                         <td class="font-medium text-slate-200">${fuelSafe(r.name)}</td>
                         <td class="font-mono text-xs text-slate-300">${r.odometer ? fuelSafe(r.odometer) : '-'}</td>
                         <td class="text-slate-300 font-mono text-xs">${fuelSafe(fuelPlate(r))}</td>
@@ -11517,6 +11533,9 @@
           hour: d.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: true })
         };
       };
+      const deliveryDatesText = sortedDeliveries.length
+        ? [...new Set(sortedDeliveries.map(r => fmt.dateTime(r.date)).filter(Boolean))].join(' / ')
+        : 'SIN REGISTRO';
       const odometerValues = sortedDispatches
         .map(r => Number(String(r.odometer || '').replace(/,/g, '')))
         .filter(n => Number.isFinite(n) && n > 0);
@@ -11534,6 +11553,7 @@
         })),
         ...sortedDispatches.map(r => ({
           date: r.date,
+          deliveryDate: getFuelDeliveryDateForDispatch(r.date, sortedDeliveries),
           type: 'Despacho',
           detail: r.name || '',
           plate: fuelPlate(r),
@@ -11544,12 +11564,13 @@
       ].sort((a, b) => new Date(a.date) - new Date(b.date));
       let runningBalance = 0;
       const movementRows = [
-        ['Fecha y hora', 'Tipo', 'Compania / persona', 'Placa', 'Modelo', 'Entrada', 'Salida', 'Saldo']
+        ['Fecha y hora', 'Fecha que llego el gasol', 'Tipo', 'Compania / persona', 'Placa', 'Modelo', 'Entrada', 'Salida', 'Saldo']
       ];
       movements.forEach(m => {
         runningBalance += m.inQty - m.outQty;
         movementRows.push([
           fmt.dateTime(m.date),
+          m.type === 'Despacho' ? fmt.date(m.deliveryDate) : fmt.date(m.date),
           m.type,
           m.detail,
           m.plate,
@@ -11562,9 +11583,11 @@
       const dispatchRows = sortedDispatches.map(r => {
         const qty = Number(r.quantity) || 0;
         const date = dateParts(r.date);
+        const deliveryDate = dateParts(getFuelDeliveryDateForDispatch(r.date, sortedDeliveries));
         return [
           date.day,
           date.hour,
+          deliveryDate.day,
           r.name || '',
           r.odometer || '',
           fuelPlate(r),
@@ -11575,33 +11598,34 @@
       });
       const reportRows = [
         ['COMPAÑIA DEL GASOL', '', companyText, ''],
+        ['FECHA QUE LLEGÓ EL GASOL', '', deliveryDatesText, ''],
         ['¿CUÁNTO LLEGÓ?', '', Number(totals.received) || 0, ''],
         [],
         ['DESPACHOS DE GASOL'],
-        ['DÍA', 'HORA', 'NOMBRE', 'HOROMETRO (KM)', 'PLACA', 'MODELO', 'DIRECCIÓN', 'GASOL'],
+        ['DÍA', 'HORA', 'FECHA QUE LLEGÓ EL GASOL', 'NOMBRE', 'HOROMETRO (KM)', 'PLACA', 'MODELO', 'DIRECCIÓN', 'GASOL'],
         ...dispatchRows,
-        ['TOTAL DESPACHADO', '', '', '', '', '', Number(exportedDispatched) || 0, ''],
-        ['¿CUÁNTO QUEDÓ EN TANQUE?', '', '', '', '', '', Number(totals.remaining) || 0, '']
+        ['TOTAL DESPACHADO', '', '', '', '', '', '', '', Number(exportedDispatched) || 0],
+        ['¿CUÁNTO QUEDÓ EN TANQUE?', '', '', '', '', '', '', '', Number(totals.remaining) || 0]
       ];
       const workbook = XLSX.utils.book_new();
       const reportSheet = XLSX.utils.aoa_to_sheet(reportRows);
       const movementSheet = XLSX.utils.aoa_to_sheet(movementRows);
       reportSheet['!cols'] = [
-        { wch: 12 }, { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 13 }, { wch: 22 }, { wch: 38 }, { wch: 13 }
+        { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 24 }, { wch: 16 }, { wch: 13 }, { wch: 22 }, { wch: 38 }, { wch: 13 }
       ];
       movementSheet['!cols'] = [
-        { wch: 22 }, { wch: 12 }, { wch: 28 }, { wch: 14 }, { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 14 }
+        { wch: 22 }, { wch: 18 }, { wch: 12 }, { wch: 28 }, { wch: 14 }, { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 14 }
       ];
       reportSheet['!merges'] = [
         { s: { r: 0, c: 0 }, e: { r: 0, c: 1 } },
         { s: { r: 0, c: 2 }, e: { r: 0, c: 3 } },
         { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } },
         { s: { r: 1, c: 2 }, e: { r: 1, c: 3 } },
-        { s: { r: 3, c: 0 }, e: { r: 3, c: 7 } },
-        { s: { r: 5 + dispatchRows.length, c: 0 }, e: { r: 5 + dispatchRows.length, c: 5 } },
-        { s: { r: 5 + dispatchRows.length, c: 6 }, e: { r: 5 + dispatchRows.length, c: 7 } },
-        { s: { r: 6 + dispatchRows.length, c: 0 }, e: { r: 6 + dispatchRows.length, c: 5 } },
-        { s: { r: 6 + dispatchRows.length, c: 6 }, e: { r: 6 + dispatchRows.length, c: 7 } }
+        { s: { r: 2, c: 0 }, e: { r: 2, c: 1 } },
+        { s: { r: 2, c: 2 }, e: { r: 2, c: 3 } },
+        { s: { r: 4, c: 0 }, e: { r: 4, c: 8 } },
+        { s: { r: 6 + dispatchRows.length, c: 0 }, e: { r: 6 + dispatchRows.length, c: 7 } },
+        { s: { r: 7 + dispatchRows.length, c: 0 }, e: { r: 7 + dispatchRows.length, c: 7 } }
       ];
       const darkBlue = '0B2E6F';
       const titleBlue = 'D9E7F7';
@@ -11668,26 +11692,26 @@
         alignment: center,
         border: baseBorder
       };
-      rangeStyle('A1:B2', labelStyle);
-      rangeStyle('C1:D2', valueStyle);
-      rangeStyle('A4:H4', titleStyle);
-      rangeStyle('A5:H5', headerStyle);
-      rangeStyle('H5:H5', gasStyle);
-      const firstDataRow = 6;
-      const lastDataRow = 5 + dispatchRows.length;
+      rangeStyle('A1:B3', labelStyle);
+      rangeStyle('C1:D3', valueStyle);
+      rangeStyle('A5:I5', titleStyle);
+      rangeStyle('A6:I6', headerStyle);
+      rangeStyle('I6:I6', gasStyle);
+      const firstDataRow = 7;
+      const lastDataRow = 6 + dispatchRows.length;
       for (let row = firstDataRow; row <= lastDataRow; row++) {
-        rangeStyle(`A${row}:F${row}`, bodyStyle);
-        rangeStyle(`G${row}:G${row}`, addressStyle);
-        rangeStyle(`H${row}:H${row}`, gasStyle);
+        rangeStyle(`A${row}:G${row}`, bodyStyle);
+        rangeStyle(`H${row}:H${row}`, addressStyle);
+        rangeStyle(`I${row}:I${row}`, gasStyle);
       }
       const totalStart = lastDataRow + 1;
-      rangeStyle(`A${totalStart}:F${totalStart + 1}`, totalLabelStyle);
-      rangeStyle(`G${totalStart}:H${totalStart + 1}`, gasStyle);
+      rangeStyle(`A${totalStart}:H${totalStart + 1}`, totalLabelStyle);
+      rangeStyle(`I${totalStart}:I${totalStart + 1}`, gasStyle);
       reportSheet['!rows'] = [
-        { hpt: 24 }, { hpt: 24 }, { hpt: 12 }, { hpt: 26 }, { hpt: 30 }
+        { hpt: 24 }, { hpt: 24 }, { hpt: 24 }, { hpt: 12 }, { hpt: 26 }, { hpt: 30 }
       ];
-      reportSheet['!autofilter'] = { ref: `A5:H${Math.max(lastDataRow, 5)}` };
-      movementSheet['!autofilter'] = { ref: `A1:G${movementRows.length}` };
+      reportSheet['!autofilter'] = { ref: `A6:I${Math.max(lastDataRow, 6)}` };
+      movementSheet['!autofilter'] = { ref: `A1:I${movementRows.length}` };
       XLSX.utils.book_append_sheet(workbook, reportSheet, 'Reporte gasol');
       XLSX.utils.book_append_sheet(workbook, movementSheet, 'Movimiento');
       const suffix = isFullReport ? 'completo' : 'filtrado';
