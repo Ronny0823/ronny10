@@ -270,6 +270,12 @@
     .data-table tr:hover td {
       background: rgba(245, 158, 11, 0.035);
     }
+    .data-table {
+      min-width: 720px;
+    }
+    .overflow-x-auto {
+      -webkit-overflow-scrolling: touch;
+    }
     input, select, textarea {
       transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
     }
@@ -331,6 +337,39 @@
       filter: drop-shadow(0 0 16px rgba(59, 130, 246, 0.35));
     }
     @media (max-width: 640px) {
+      body {
+        overflow-x: hidden;
+      }
+      #mainContent {
+        width: 100%;
+      }
+      header.glass-strong {
+        padding-left: 4rem;
+      }
+      #page-title {
+        font-size: 1rem;
+        line-height: 1.25rem;
+      }
+      .glass,
+      .glass-strong {
+        border-radius: 0.75rem;
+      }
+      .data-table th,
+      .data-table td {
+        padding: 0.7rem;
+        font-size: 0.78rem;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        min-height: 44px;
+      }
+      #toastContainer {
+        left: 1rem;
+        right: 1rem;
+        bottom: 1rem;
+      }
       .rlrr-login-logo {
         width: 78px;
         height: 78px;
@@ -340,6 +379,7 @@
         height: 34px;
       }
     }
+
   </style>
 <base target="_blank">
 <base target="_blank">
@@ -581,6 +621,25 @@
       table: 'erp_documents'
     };
 
+    const safeText = (value) => String(value ?? '').trim();
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+    const escapeAttr = (value) => escapeHtml(value).replace(/`/g, '&#96;');
+    const toFiniteNumber = (value, fallback = 0) => {
+      const num = Number(String(value ?? '').replace(/,/g, '.'));
+      return Number.isFinite(num) ? num : fallback;
+    };
+    const isPositiveNumber = (value) => Number.isFinite(value) && value > 0;
+    const isValidDateInput = (value) => {
+      if (!value) return false;
+      const date = new Date(`${value}T12:00:00`);
+      return !Number.isNaN(date.getTime());
+    };
+    const showExcelLibraryError = () => {
+      showToast('No se pudo cargar la librería de Excel. Revisa tu conexión e intenta de nuevo.', 'error');
+    };
+
     const SupabaseSync = {
       client: null,
       enabled: false,
@@ -606,11 +665,17 @@
           return;
         }
 
-        this.client = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
-        await this.pullAll();
-        this.installLocalStorageSync();
-        await this.pushLocalSnapshot();
-        console.info('Supabase conectado y sincronizado.');
+        try {
+          this.client = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+          await this.pullAll();
+          this.installLocalStorageSync();
+          await this.pushLocalSnapshot();
+          console.info('Supabase conectado y sincronizado.');
+        } catch (error) {
+          this.client = null;
+          this.enabled = false;
+          console.warn('Supabase no disponible. La app seguirá usando datos locales:', error.message || error);
+        }
       },
 
       installLocalStorageSync() {
@@ -679,40 +744,49 @@
 
       async pullAll() {
         if (!this.client) return;
-        const { data, error } = await this.client
-          .from(SUPABASE_CONFIG.table)
-          .select('key,value')
-          .like('key', 'erp_%');
+        try {
+          const { data, error } = await this.client
+            .from(SUPABASE_CONFIG.table)
+            .select('key,value')
+            .like('key', 'erp_%');
 
-        if (error) {
-          console.warn('No se pudo leer Supabase:', error.message);
-          return;
+          if (error) {
+            console.warn('No se pudo leer Supabase:', error.message);
+            return;
+          }
+
+          (data || []).forEach(row => {
+            if (!this.shouldSyncKey(row.key)) return;
+            const merged = this.mergeValue(row.key, localStorage.getItem(row.key), row.value);
+            this.originalSetItem(row.key, this.stringifyValue(merged));
+          });
+        } catch (error) {
+          console.warn('No se pudo leer Supabase. Se mantienen los datos locales:', error.message || error);
         }
-
-        (data || []).forEach(row => {
-          if (!this.shouldSyncKey(row.key)) return;
-          const merged = this.mergeValue(row.key, localStorage.getItem(row.key), row.value);
-          this.originalSetItem(row.key, this.stringifyValue(merged));
-        });
       },
 
       async pullUser(username) {
         if (!this.client || !username) return;
         const keys = ['erp_users', `erp_data_${username}`, `erp_config_${username}`];
-        const { data, error } = await this.client
-          .from(SUPABASE_CONFIG.table)
-          .select('key,value')
-          .in('key', keys);
+        try {
+          const { data, error } = await this.client
+            .from(SUPABASE_CONFIG.table)
+            .select('key,value')
+            .in('key', keys);
 
-        if (error) {
-          console.warn('No se pudo leer el usuario desde Supabase:', error.message);
-          return;
+          if (error) {
+            console.warn('No se pudo leer el usuario desde Supabase:', error.message);
+            return;
+          }
+
+          (data || []).forEach(row => {
+            if (!this.shouldSyncKey(row.key)) return;
+            const merged = this.mergeValue(row.key, localStorage.getItem(row.key), row.value);
+            this.originalSetItem(row.key, this.stringifyValue(merged));
+          });
+        } catch (error) {
+          console.warn('No se pudo leer el usuario desde Supabase. Se mantienen los datos locales:', error.message || error);
         }
-
-        (data || []).forEach(row => {
-          const merged = this.mergeValue(row.key, localStorage.getItem(row.key), row.value);
-          this.originalSetItem(row.key, this.stringifyValue(merged));
-        });
       },
 
       async pushLocalSnapshot() {
@@ -728,8 +802,12 @@
           });
         }
         if (!rows.length) return;
-        const { error } = await this.client.from(SUPABASE_CONFIG.table).upsert(rows, { onConflict: 'key' });
-        if (error) console.warn('No se pudo enviar el respaldo inicial a Supabase:', error.message);
+        try {
+          const { error } = await this.client.from(SUPABASE_CONFIG.table).upsert(rows, { onConflict: 'key' });
+          if (error) console.warn('No se pudo enviar el respaldo inicial a Supabase:', error.message);
+        } catch (error) {
+          console.warn('No se pudo enviar el respaldo inicial a Supabase:', error.message || error);
+        }
       },
 
       queueUpsert(key, rawValue) {
@@ -745,16 +823,25 @@
 
       async queueDelete(key) {
         if (!this.client) return;
-        const { error } = await this.client.from(SUPABASE_CONFIG.table).delete().eq('key', key);
-        if (error) console.warn('No se pudo borrar en Supabase:', error.message);
+        try {
+          const { error } = await this.client.from(SUPABASE_CONFIG.table).delete().eq('key', key);
+          if (error) console.warn('No se pudo borrar en Supabase:', error.message);
+        } catch (error) {
+          console.warn('No se pudo borrar en Supabase:', error.message || error);
+        }
       },
 
       async flush() {
         if (!this.client || !this.pending.size) return;
         const rows = Array.from(this.pending.values());
         this.pending.clear();
-        const { error } = await this.client.from(SUPABASE_CONFIG.table).upsert(rows, { onConflict: 'key' });
-        if (error) console.warn('No se pudo sincronizar Supabase:', error.message);
+        try {
+          const { error } = await this.client.from(SUPABASE_CONFIG.table).upsert(rows, { onConflict: 'key' });
+          if (error) console.warn('No se pudo sincronizar Supabase:', error.message);
+        } catch (error) {
+          rows.forEach(row => this.pending.set(row.key, row));
+          console.warn('No se pudo sincronizar Supabase. Se reintentará luego:', error.message || error);
+        }
       }
     };
 
@@ -1097,8 +1184,12 @@
 
     async function handleLogin(e) {
       e.preventDefault();
-      const username = document.getElementById('loginUsername').value.trim();
+      const username = safeText(document.getElementById('loginUsername').value);
       const password = document.getElementById('loginPassword').value;
+      if (!username || !password) {
+        showAuthMessage('Usuario y contraseña son requeridos', 'error');
+        return;
+      }
       
       const result = await AuthSystem.login(username, password);
       
@@ -1113,8 +1204,8 @@
     async function handleRegister(e) {
       e.preventDefault();
       
-      const fullName = document.getElementById('regFullName').value.trim();
-      const username = document.getElementById('regUsername').value.trim();
+      const fullName = safeText(document.getElementById('regFullName').value);
+      const username = safeText(document.getElementById('regUsername').value);
       const password = document.getElementById('regPassword').value;
       const passwordConfirm = document.getElementById('regPasswordConfirm').value;
       
@@ -1212,14 +1303,26 @@
         
         const savedData = localStorage.getItem(`erp_data_${username}`);
         if (savedData) {
-          this.data = JSON.parse(savedData);
+          try {
+            const parsedData = JSON.parse(savedData);
+            this.data = Array.isArray(parsedData) ? parsedData : [];
+          } catch (error) {
+            console.warn('Datos locales inválidos. Se inicia con lista vacía:', error.message || error);
+            this.data = [];
+            showToast('Los datos locales tenían un formato inválido. Se evitó un cierre inesperado.', 'warning');
+          }
         } else {
           this.data = [];
         }
         
         const savedConfig = localStorage.getItem(`erp_config_${username}`);
         if (savedConfig) {
-          this.config = { ...this.config, ...JSON.parse(savedConfig) };
+          try {
+            this.config = { ...this.config, ...JSON.parse(savedConfig) };
+          } catch (error) {
+            console.warn('Configuración local inválida. Se usará la configuración base:', error.message || error);
+            showToast('La configuración local tenía un formato inválido. Se usó la configuración base.', 'warning');
+          }
         }
         
         // Update invoice counter from existing invoices
@@ -1462,6 +1565,7 @@
 
     function showToast(message, type = 'success') {
       const container = document.getElementById('toastContainer');
+      if (!container) return;
       const toast = document.createElement('div');
       
       const icons = { success: 'check-circle', error: 'x-circle', warning: 'alert-triangle', info: 'info' };
@@ -1473,7 +1577,13 @@
       };
       
       toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl border backdrop-blur-sm shadow-lg transform transition-all duration-300 translate-x-full opacity-0 ${colors[type]}`;
-      toast.innerHTML = `<i data-lucide="${icons[type]}" class="w-5 h-5"></i><span class="text-sm font-medium">${message}</span>`;
+      const icon = document.createElement('i');
+      icon.setAttribute('data-lucide', icons[type] || icons.info);
+      icon.className = 'w-5 h-5 flex-shrink-0';
+      const text = document.createElement('span');
+      text.className = 'text-sm font-medium';
+      text.textContent = String(message ?? '');
+      toast.append(icon, text);
       
       container.appendChild(toast);
       lucide.createIcons();
@@ -1486,6 +1596,66 @@
         toast.classList.add('translate-x-full', 'opacity-0');
         setTimeout(() => toast.remove(), 300);
       }, 3000);
+    }
+
+    function openPrintDocument(html, options = {}) {
+      const printWindow = options.windowRef || window.open('', '_blank');
+      if (!printWindow) {
+        showToast(options.blockedMessage || 'El navegador bloqueó la ventana de impresión', 'warning');
+        return null;
+      }
+
+      const autoClose = options.autoClose !== false;
+      const printDelay = Number.isFinite(options.delay) ? options.delay : 250;
+      const content = String(html).replace(/<body([^>]*)\s+onload="[^"]*"([^>]*)>/i, '<body$1$2>');
+
+      printWindow.document.open();
+      printWindow.document.write(content);
+      printWindow.document.close();
+
+      const waitForAssets = () => {
+        const images = Array.from(printWindow.document.images || []);
+        if (!images.length) return Promise.resolve();
+
+        const imagePromises = images.map(img => {
+          if (img.complete) return Promise.resolve();
+          return new Promise(resolve => {
+            img.addEventListener('load', resolve, { once: true });
+            img.addEventListener('error', resolve, { once: true });
+          });
+        });
+
+        return Promise.race([
+          Promise.all(imagePromises),
+          new Promise(resolve => setTimeout(resolve, 1800))
+        ]);
+      };
+
+      const printWhenReady = async () => {
+        await waitForAssets();
+        setTimeout(() => {
+          try {
+            printWindow.focus();
+            printWindow.print();
+            if (autoClose) {
+              setTimeout(() => {
+                try { printWindow.close(); } catch (error) {}
+              }, 700);
+            }
+          } catch (error) {
+            showToast('No se pudo abrir la impresión', 'error');
+          }
+        }, printDelay);
+      };
+
+      if (printWindow.document.readyState === 'complete') {
+        printWhenReady();
+      } else {
+        printWindow.addEventListener('load', printWhenReady, { once: true });
+        setTimeout(printWhenReady, 1200);
+      }
+
+      return printWindow;
     }
 
     function showModal(content) {
@@ -2195,14 +2365,14 @@
                     <input type="text" id="saleClient" required placeholder="Nombre del cliente" list="clientList"
                       class="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 input-focus transition-all">
                     <datalist id="clientList">
-                      ${clients.map(c => `<option value="${c.client_name}">`).join('')}
+                      ${clients.map(c => `<option value="${escapeAttr(c.client_name)}">`).join('')}
                     </datalist>
                   </div>
                 </div>
 
                 <div>
                   <label class="block text-sm font-medium text-slate-400 mb-2">Fecha de venta</label>
-                  <input type="date" id="saleDate" value="${today}" required
+                  <input type="date" id="saleDate" value="${today}" max="${today}" required
                     class="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-200 font-mono input-focus transition-all">
                   <p class="text-xs text-slate-500 mt-1">Puedes cambiarla si estás registrando una venta de otro día</p>
                 </div>
@@ -2233,8 +2403,8 @@
                       <option value="">Seleccionar material...</option>
                       ${materials.map(m => {
                         const stock = inv[m.name] ? inv[m.name].stock : 0;
-                        return `<option value="${m.name}" data-price="${m.price}" data-stock="${stock}" ${stock <= 0 ? 'disabled' : ''}>
-                          ${m.name} — Stock: ${fmt.number(stock)} ${stock <= 0 ? '(Agotado)' : ''}
+                        return `<option value="${escapeAttr(m.name)}" data-price="${escapeAttr(m.price)}" data-stock="${escapeAttr(stock)}" ${stock <= 0 ? 'disabled' : ''}>
+                          ${escapeHtml(m.name)} - Stock: ${fmt.number(stock)} ${stock <= 0 ? '(Agotado)' : ''}
                         </option>`;
                       }).join('')}
                     </select>
@@ -2242,12 +2412,12 @@
                     <div class="grid grid-cols-2 gap-4">
                       <div>
                         <label class="block text-xs text-slate-500 mb-1">Cantidad</label>
-                        <input type="number" id="saleQty" step="0.1" min="0.1" oninput="updateSaleTotal()"
+                        <input type="number" id="saleQty" step="0.1" min="0.1" inputmode="decimal" oninput="updateSaleTotal()"
                           class="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-200 font-mono input-focus transition-all">
                       </div>
                       <div>
                         <label class="block text-xs text-slate-500 mb-1">Precio Unitario</label>
-                        <input type="number" id="salePrice" step="0.01" min="0" oninput="updateSaleTotal()"
+                        <input type="number" id="salePrice" step="0.01" min="0.01" inputmode="decimal" oninput="updateSaleTotal()"
                           class="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-200 font-mono input-focus transition-all">
                       </div>
                     </div>
@@ -2364,7 +2534,7 @@
       const opt = sel.options[sel.selectedIndex];
       if (!opt.value) return;
       
-      const price = parseFloat(opt.dataset.price || 0);
+      const price = Math.max(0, toFiniteNumber(opt.dataset.price, 0));
       document.getElementById('salePrice').value = price;
       updateSaleTotal();
     }
@@ -2375,11 +2545,11 @@
 
       const opt = sel.options[sel.selectedIndex];
       const materialName = sel.value;
-      const qty = parseFloat(document.getElementById('saleQty')?.value || 0);
-      const price = parseFloat(document.getElementById('salePrice')?.value || 0);
-      const stock = parseFloat(opt?.dataset.stock || 0);
+      const qty = toFiniteNumber(document.getElementById('saleQty')?.value, 0);
+      const price = toFiniteNumber(document.getElementById('salePrice')?.value, 0);
+      const stock = toFiniteNumber(opt?.dataset.stock, 0);
 
-      if (!materialName || !qty || qty <= 0 || isNaN(price) || price < 0) return null;
+      if (!materialName || !isPositiveNumber(qty) || !isPositiveNumber(price) || stock < 0) return null;
 
       return {
         material_name: materialName,
@@ -2411,7 +2581,7 @@
       list.innerHTML = AppState.saleItems.map((item, index) => `
         <div class="flex items-center justify-between gap-3 p-3 bg-slate-900/40 border border-slate-700/50 rounded-lg">
           <div class="min-w-0">
-            <div class="font-medium text-slate-200 truncate">${item.material_name}</div>
+            <div class="font-medium text-slate-200 truncate">${escapeHtml(item.material_name)}</div>
             <div class="text-xs text-slate-500 font-mono">${fmt.number(item.quantity)} x ${fmt.currency(item.price)}</div>
           </div>
           <div class="flex items-center gap-2 flex-shrink-0">
@@ -2436,6 +2606,11 @@
       const alreadyAdded = AppState.saleItems
         .filter(i => i.material_name === item.material_name)
         .reduce((sum, i) => sum + (i.quantity || 0), 0);
+
+      if (!Number.isFinite(item.subtotal) || item.subtotal <= 0) {
+        showToast('Revisa la cantidad y el precio antes de agregar el producto.', 'warning');
+        return false;
+      }
 
       if (item.quantity + alreadyAdded > item.stock) {
         showToast('Stock insuficiente para agregar este producto', 'error');
@@ -2466,9 +2641,9 @@
     function updateSaleTotal() {
       if (!document.getElementById('saleTotalDisplay')) return;
       const ivaEnabled = document.getElementById('saleIvaEnabled')?.checked ?? AppState.config.iva_default_enabled;
-      const ivaRate = parseFloat(document.getElementById('saleIvaRate')?.value || 0);
+      const ivaRate = Math.min(100, Math.max(0, toFiniteNumber(document.getElementById('saleIvaRate')?.value, 0)));
       
-      const subtotal = getSaleSubtotal();
+      const subtotal = Math.max(0, toFiniteNumber(getSaleSubtotal(), 0));
       let tax = 0;
       let total = subtotal;
       
@@ -2545,13 +2720,34 @@
       const btn = document.getElementById('saleBtn');
       const printBtn = document.getElementById('salePrintBtn');
       
-      const client = document.getElementById('saleClient').value.trim();
-      const vehiclePlate = document.getElementById('saleVehiclePlate').value.trim().toUpperCase();
-      const paymentType = document.querySelector('input[name="paymentType"]:checked').value;
+      const client = safeText(document.getElementById('saleClient').value);
+      const vehiclePlate = safeText(document.getElementById('saleVehiclePlate').value).toUpperCase();
+      const paymentType = document.querySelector('input[name="paymentType"]:checked')?.value || 'pago';
       const saleDate = document.getElementById('saleDate')?.value;
       
       const ivaEnabled = document.getElementById('saleIvaEnabled').checked;
-      const ivaRate = ivaEnabled ? parseFloat(document.getElementById('saleIvaRate').value || 0) : 0;
+      const ivaRate = ivaEnabled ? toFiniteNumber(document.getElementById('saleIvaRate').value, 0) : 0;
+
+      if (!client) {
+        showToast('El nombre del cliente es requerido.', 'warning');
+        return;
+      }
+
+      if (!isValidDateInput(saleDate)) {
+        showToast('Selecciona una fecha de venta válida.', 'warning');
+        return;
+      }
+
+      const todayKey = getLocalDateKey(new Date().toISOString());
+      if (saleDate > todayKey) {
+        showToast('La fecha de venta no puede ser futura.', 'warning');
+        return;
+      }
+
+      if (ivaEnabled && (ivaRate < 0 || ivaRate > 100)) {
+        showToast('El porcentaje de IVA debe estar entre 0 y 100.', 'warning');
+        return;
+      }
 
       let saleItems = [...AppState.saleItems];
       if (!saleItems.length) {
@@ -2584,9 +2780,24 @@
         return;
       }
       
-      const subtotal = saleItems.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+      const invalidItem = saleItems.find(item =>
+        !item.material_name ||
+        !isPositiveNumber(toFiniteNumber(item.quantity, 0)) ||
+        !isPositiveNumber(toFiniteNumber(item.price, 0)) ||
+        !isPositiveNumber(toFiniteNumber(item.subtotal, 0))
+      );
+      if (invalidItem) {
+        showToast('Hay un producto con cantidad, precio o subtotal inválido.', 'error');
+        return;
+      }
+
+      const subtotal = saleItems.reduce((sum, item) => sum + toFiniteNumber(item.subtotal, 0), 0);
       const tax = ivaEnabled ? subtotal * (ivaRate / 100) : 0;
       const total = subtotal + tax;
+      if (!isPositiveNumber(total)) {
+        showToast('El total de la venta debe ser mayor que cero.', 'warning');
+        return;
+      }
       const firstItem = saleItems[0];
       const materialLabel = saleItems.length === 1 ? firstItem.material_name : 'Varios productos';
       const quantityTotal = saleItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
@@ -3311,17 +3522,26 @@
       e.preventDefault();
       
       const method = document.getElementById('paymentMethod').value;
-      const notes = document.getElementById('paymentNotes').value.trim();
+      const notes = safeText(document.getElementById('paymentNotes').value);
+      const safeAmount = toFiniteNumber(amount, 0);
+      if (!isPositiveNumber(safeAmount)) {
+        showToast('El monto del pago debe ser mayor que cero.', 'error');
+        return;
+      }
       
       try {
         const sale = AppState.data.find(r => r.__backendId === saleId);
+        if (!sale) {
+          showToast('No se encontró la venta para registrar el pago.', 'error');
+          return;
+        }
         
         const paymentData = {
           type: 'payment',
           sale_id: saleId,
           client_name: sale.client_name,
           invoice_number: sale.invoice_number,
-          amount: amount,
+          amount: safeAmount,
           method: method,
           notes: notes || 'Pago total - Liquidación completa',
           date: document.getElementById('entryDate').value || new Date().toISOString(),
@@ -3337,7 +3557,7 @@
         
         AppState.saveUserData();
         
-        showToast(`Pago total de ${fmt.currency(amount)} registrado correctamente`, 'success');
+        showToast(`Pago total de ${fmt.currency(safeAmount)} registrado correctamente`, 'success');
         
         setTimeout(() => {
           if (confirm('¿Deseas imprimir el recibo de pago total?')) {
@@ -3434,17 +3654,22 @@
     async function savePayment(e, saleId, maxAmount) {
       e.preventDefault();
       
-      const amount = parseFloat(document.getElementById('paymentAmount').value);
+      const amount = toFiniteNumber(document.getElementById('paymentAmount').value, 0);
+      const safeMaxAmount = toFiniteNumber(maxAmount, 0);
       const method = document.getElementById('paymentMethod').value;
-      const notes = document.getElementById('paymentNotes').value.trim();
+      const notes = safeText(document.getElementById('paymentNotes').value);
       
-      if (amount <= 0 || amount > maxAmount) {
-        showToast('Monto inválido', 'error');
+      if (!isPositiveNumber(amount) || amount > safeMaxAmount) {
+        showToast(`Ingresa un monto mayor que cero y no mayor a ${fmt.currency(safeMaxAmount)}.`, 'error');
         return;
       }
       
       try {
         const sale = AppState.data.find(r => r.__backendId === saleId);
+        if (!sale) {
+          showToast('No se encontró la venta para registrar el abono.', 'error');
+          return;
+        }
         
         const paymentData = {
           type: 'payment',
@@ -3461,7 +3686,7 @@
         AppState.data.push(paymentData);
         
         const payments = getRecords('payment').filter(p => p.sale_id === saleId);
-        const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0) + amount;
+        const totalPaid = payments.reduce((sum, p) => sum + toFiniteNumber(p.amount, 0), 0);
         const remaining = (sale.sale_total || 0) - totalPaid;
         
         if (remaining <= 0) {
@@ -3526,7 +3751,6 @@
       const receiptTitle = isFullPayment ? 'RECIBO DE PAGO TOTAL' : 'RECIBO DE ABONO';
       const receiptType = isFullPayment ? 'PAGO TOTAL' : 'ABONO';
 
-      const printWindow = window.open('', '_blank');
       const isThermal = printerType.includes('thermal');
       const is58mm = printerType === 'thermal_58';
       const width = is58mm ? '58mm' : isThermal ? '80mm' : '210mm';
@@ -3651,7 +3875,7 @@
         </div>
       `;
 
-      printWindow.document.write(`
+      openPrintDocument(`
         <!DOCTYPE html>
         <html>
           <head>
@@ -3664,8 +3888,7 @@
             ${content}
           </body>
         </html>
-      `);
-      printWindow.document.close();
+      `, { autoClose: true });
     }
     
 
@@ -4313,7 +4536,7 @@
 
     function exportReport() {
       if (!window.XLSX) {
-        showToast('No se pudo cargar la libreria de Excel. Revisa tu conexion e intenta de nuevo.', 'error');
+        showExcelLibraryError();
         return;
       }
 
@@ -4929,8 +5152,7 @@
         return;
       }
       
-      const printWindow = window.open('', '_blank');
-      printWindow.document.write(`
+      openPrintDocument(`
         <!DOCTYPE html>
         <html>
           <head>
@@ -4954,8 +5176,7 @@
             </div>
           </body>
         </html>
-      `);
-      printWindow.document.close();
+      `, { autoClose: false, blockedMessage: 'Permite ventanas emergentes para probar la impresión del logo' });
     }
 
     function getPrinterSearchOptions() {
@@ -5684,6 +5905,10 @@
     }
 
     function generateInvoicePDF(inv) {
+      if (!window.jspdf?.jsPDF) {
+        showToast('No se pudo cargar la librería de PDF. Revisa tu conexión e intenta de nuevo.', 'error');
+        return;
+      }
       const { jsPDF } = window.jspdf;
       const invoiceItems = getInvoiceItems(inv);
       const isCreditoInvoice = inv.payment_type === 'credito';
@@ -6119,153 +6344,6 @@
       showToast(`PDF descargado: ${inv.invoice_number} (${formatLabel})`);
     }
 
-    function testPrint() {
-      const testData = {
-        invoice_number: 'TEST-001',
-        client_name: 'Cliente de Prueba',
-        vehicle_plate: 'TEST-1234',
-        material_name: 'Material Test',
-        quantity: 1,
-        price: 100,
-        subtotal: 100,
-        tax: 16,
-        sale_total: 116,
-        date: new Date().toISOString(),
-        payment_type: 'pago',
-        iva_enabled: true,
-        iva_rate: 16
-      };
-      
-      printInvoice(testData, true);
-      showToast('Página de prueba enviada a impresión');
-    }
-
-    function saveAllSettings() {
-      AppState.config.company_name = document.getElementById('configCompanyName').value;
-      AppState.config.company_rfc = document.getElementById('configRFC').value.toUpperCase();
-      AppState.config.company_address = document.getElementById('configAddress').value;
-      AppState.config.company_phone = document.getElementById('configPhone').value;
-      AppState.config.company_slogan = document.getElementById('configSlogan').value;
-      AppState.config.printer_type = document.getElementById('configPrinterType').value;
-      AppState.config.bluetooth_print_mode = document.getElementById('configBluetoothPrintMode')?.value || AppState.config.bluetooth_print_mode || 'thermal_80';
-      AppState.config.bluetooth_charset = document.getElementById('configBluetoothCharset')?.value || AppState.config.bluetooth_charset || 'cp850';
-      AppState.config.printer_name = document.getElementById('configPrinterName').value;
-      AppState.config.paper_size = document.getElementById('configPaperSize').value;
-      AppState.config.currency = document.getElementById('configCurrency').value;
-      AppState.config.auto_print = document.getElementById('configAutoPrint').checked;
-      
-      AppState.config.iva_default_enabled = document.getElementById('configIvaDefaultEnabled').checked;
-      AppState.config.iva_default_rate = parseFloat(document.getElementById('configIvaDefaultRate').value) || 16;
-      AppState.config.tax_rate = parseFloat(document.getElementById('configTax').value) || 16;
-      
-      saveConfig();
-      updateCompanyInfo();
-    }
-
-    function saveConfig() {
-      AppState.saveUserData();
-      showToast('Configuración guardada correctamente');
-    }
-
-    async function printInvoiceById(id) {
-      const inv = AppState.data.find(r => r.__backendId === id);
-      if (!inv) return;
-
-      const printerType = getEffectivePrinterType();
-
-      if (isBluetoothPrinterSelected()) {
-        try {
-          await BluetoothPrinter.printInvoice(inv);
-          showToast('Factura enviada directo por Bluetooth', 'success');
-        } catch (err) {
-          showToast('No se pudo imprimir directo por Bluetooth. Se abrirá impresión normal.', 'warning');
-          printInvoice(inv);
-        }
-        return;
-      }
-
-      // Si es PDF o térmica: generar PDF descargable (funciona en cualquier navegador/móvil)
-      if (printerType === 'pdf' || printerType === 'thermal_80' || printerType === 'thermal_58') {
-        generateInvoicePDF(inv);
-        return;
-      }
-
-      // Solo para impresora estándar en desktop: abrir ventana de impresión
-      printInvoice(inv);
-    }
-
-    function downloadInvoicePDF(id) {
-      const inv = AppState.data.find(r => r.__backendId === id);
-      if (!inv) return;
-      generateInvoicePDF(inv);
-      return;
-      
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
-      
-      if (AppState.config.company_logo) {
-        try {
-          doc.addImage(AppState.config.company_logo, 'JPEG', 20, 10, 40, 20);
-        } catch (e) {
-          console.log('No se pudo agregar el logo al PDF');
-        }
-      }
-      
-      let yPos = AppState.config.company_logo ? 40 : 20;
-      
-      doc.setFontSize(20);
-      doc.text(AppState.config.company_name, 105, yPos, { align: 'center' });
-      doc.setFontSize(10);
-      doc.text(AppState.config.company_slogan, 105, yPos + 8, { align: 'center' });
-      
-      doc.setFontSize(16);
-      doc.text(`Factura: ${inv.invoice_number}`, 20, yPos + 20);
-      doc.setFontSize(12);
-      doc.text(`Fecha: ${fmt.date(inv.date)}`, 20, yPos + 30);
-      doc.text(`Cliente: ${inv.client_name}`, 20, yPos + 40);
-      
-      if (inv.vehicle_plate) {
-        doc.text(`Placa: ${inv.vehicle_plate}`, 20, yPos + 48);
-      }
-      
-      if (inv.iva_enabled) {
-        doc.setFontSize(10);
-        doc.setTextColor(245, 158, 11);
-        doc.text(`* Incluye IVA ${inv.iva_rate}%`, 20, inv.vehicle_plate ? yPos + 56 : yPos + 48);
-        doc.setTextColor(0, 0, 0);
-      }
-      
-      const yOffset = inv.vehicle_plate ? (inv.iva_enabled ? yPos + 66 : yPos + 58) : (inv.iva_enabled ? yPos + 58 : yPos + 50);
-      
-      doc.setFillColor(240, 240, 240);
-      doc.rect(20, yOffset, 170, 10, 'F');
-      doc.text('Material', 25, yOffset + 7);
-      doc.text('Cantidad', 100, yOffset + 7);
-      doc.text('Precio', 140, yOffset + 7);
-      doc.text('Total', 170, yOffset + 7);
-      
-      doc.text(inv.material_name, 25, yOffset + 20);
-      doc.text(String(inv.quantity), 105, yOffset + 20);
-      doc.text(fmt.currency(inv.price), 140, yOffset + 20);
-      doc.text(fmt.currency(inv.sale_total), 170, yOffset + 20);
-      
-      doc.line(20, yOffset + 30, 190, yOffset + 30);
-      
-      if (inv.iva_enabled) {
-        doc.text(`Subtotal:`, 150, yOffset + 40);
-        doc.text(fmt.currency(inv.subtotal || (inv.sale_total - (inv.tax || 0))), 170, yOffset + 40);
-        doc.text(`IVA (${inv.iva_rate}%):`, 150, yOffset + 47);
-        doc.text(fmt.currency(inv.tax || 0), 170, yOffset + 47);
-      }
-      
-      doc.setFontSize(14);
-      doc.setTextColor(245, 158, 11);
-      doc.text(`TOTAL: ${fmt.currency(inv.sale_total)}`, 150, yOffset + 57);
-      
-      doc.save(`factura_${inv.invoice_number}.pdf`);
-      showToast('PDF descargado correctamente');
-    }
-
     function printInvoice(invoice, isTest = false) {
       const printerType = isBluetoothPrinterSelected() ? 'standard' : getEffectivePrinterType();
       const invoiceItems = getInvoiceItems(invoice);
@@ -6278,7 +6356,6 @@
           return;
         }
       }
-      const printWindow = window.open('', '_blank');
       const isThermal = printerType.includes('thermal');
       const is58mm = printerType === 'thermal_58';
       const width = is58mm ? '58mm' : isThermal ? '80mm' : '210mm';
@@ -6506,7 +6583,7 @@
         </div>
       `;
 
-      printWindow.document.write(`
+      openPrintDocument(`
         <!DOCTYPE html>
         <html>
           <head>
@@ -6519,8 +6596,7 @@
             ${content}
           </body>
         </html>
-      `);
-      printWindow.document.close();
+      `, { autoClose: true });
     }
     
 
@@ -6957,17 +7033,30 @@
       const invoice = AppState.data.find(r => r.__backendId === invoiceId);
       if (!invoice) return;
 
-      const qty = parseFloat(document.getElementById('editInvQty').value);
-      const price = parseFloat(document.getElementById('editInvPrice').value);
+      const qty = toFiniteNumber(document.getElementById('editInvQty').value, 0);
+      const price = toFiniteNumber(document.getElementById('editInvPrice').value, 0);
+      const clientName = safeText(document.getElementById('editInvClient').value);
+      const materialName = safeText(document.getElementById('editInvMaterial').value);
+
+      if (!clientName || !materialName) {
+        showToast('Cliente y material son requeridos.', 'warning');
+        return;
+      }
+
+      if (!isPositiveNumber(qty) || !isPositiveNumber(price)) {
+        showToast('Cantidad y precio deben ser mayores que cero.', 'warning');
+        return;
+      }
+
       const subtotal = qty * price;
       const tax = invoice.iva_enabled ? subtotal * (invoice.iva_rate / 100) : 0;
       const total = subtotal + tax;
 
       try {
         // Actualizar factura
-        invoice.client_name = document.getElementById('editInvClient').value.trim();
-        invoice.vehicle_plate = document.getElementById('editInvPlate').value.trim().toUpperCase();
-        invoice.material_name = document.getElementById('editInvMaterial').value.trim();
+        invoice.client_name = clientName;
+        invoice.vehicle_plate = safeText(document.getElementById('editInvPlate').value).toUpperCase();
+        invoice.material_name = materialName;
         invoice.quantity = qty;
         invoice.price = price;
         invoice.subtotal = subtotal;
@@ -7205,13 +7294,7 @@
         return;
       }
 
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        showToast('El navegador bloqueó la ventana de impresión', 'error');
-        return;
-      }
-
-      printWindow.document.write(`
+      openPrintDocument(`
         <!DOCTYPE html>
         <html>
           <head>
@@ -7240,8 +7323,7 @@
             ${sections.join('')}
           </body>
         </html>
-      `);
-      printWindow.document.close();
+      `, { autoClose: false });
     }
 
     function buildConsolidatedCreditInvoicePrintSection(invoices) {
@@ -7941,7 +8023,6 @@
         return;
       }
 
-      const printWindow = window.open('', '_blank');
       const isThermal = false;
       const is58mm = printerType === 'thermal_58';
       const width = is58mm ? '58mm' : isThermal ? '80mm' : '210mm';
@@ -8026,7 +8107,7 @@
         <div class="total">TOTAL PAGADO: ${fmt.currency(total)}</div>
       `;
 
-      printWindow.document.write(`
+      openPrintDocument(`
         <!DOCTYPE html>
         <html>
           <head>
@@ -8039,8 +8120,7 @@
             ${content}
           </body>
         </html>
-      `);
-      printWindow.document.close();
+      `, { autoClose: true });
     }
 
     
@@ -8384,7 +8464,7 @@
 
     function exportDailyMetersReport() {
       if (!window.XLSX) {
-        showToast('No se pudo cargar la libreria de Excel. Revisa tu conexion e intenta de nuevo.', 'error');
+        showExcelLibraryError();
         return;
       }
 
@@ -8530,8 +8610,6 @@
         dailyData[day].totalAmount += (s.sale_total || 0);
       });
 
-      const printWindow = window.open('', '_blank');
-
       const content = `
         <!DOCTYPE html>
         <html>
@@ -8629,8 +8707,7 @@
         </html>
       `;
 
-      printWindow.document.write(content);
-      printWindow.document.close();
+      openPrintDocument(content, { autoClose: false });
     }
 
 
@@ -8937,7 +9014,7 @@
 
     function exportDirectTripsExcel() {
       if (!window.XLSX) {
-        showToast('No se pudo cargar la libreria de Excel. Revisa tu conexion e intenta de nuevo.', 'error');
+        showExcelLibraryError();
         return;
       }
 
@@ -9495,7 +9572,6 @@
         return;
       }
 
-      const printWindow = window.open('', '_blank');
       const isThermal = false;
       const is58mm = printerType === 'thermal_58';
       const width = is58mm ? '58mm' : isThermal ? '80mm' : '210mm';
@@ -9658,7 +9734,7 @@
         </div>
       `;
 
-      printWindow.document.write(`
+      openPrintDocument(`
         <!DOCTYPE html>
         <html>
           <head>
@@ -9671,8 +9747,7 @@
             ${content}
           </body>
         </html>
-      `);
-      printWindow.document.close();
+      `, { autoClose: true });
     }
 
     async function printDirectTripPaymentReceipt(trip, amount, method, notes) {
@@ -9694,7 +9769,6 @@
         return;
       }
 
-      const printWindow = window.open('', '_blank');
       const isThermal = false;
       const is58mm = printerType === 'thermal_58';
       const width = is58mm ? '58mm' : isThermal ? '80mm' : '210mm';
@@ -9836,7 +9910,7 @@
         </div>
       `;
 
-      printWindow.document.write(`
+      openPrintDocument(`
         <!DOCTYPE html>
         <html>
           <head>
@@ -9849,8 +9923,7 @@
             ${content}
           </body>
         </html>
-      `);
-      printWindow.document.close();
+      `, { autoClose: true });
     }
 
     
@@ -10731,9 +10804,7 @@
     }
 
     function fuelSafe(value) {
-      return String(value ?? '').replace(/[&<>"']/g, (c) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-      }[c]));
+      return escapeHtml(value);
     }
 
     function splitFuelPlateModel(value) {
@@ -11186,11 +11257,6 @@
       }
 
       const totals = getFuelTotals();
-      const w = window.open('', '_blank');
-      if (!w) {
-        showToast('Permite ventanas emergentes para imprimir el recibo', 'warning');
-        return;
-      }
       const isThermal = printerType.includes('thermal');
       const is58mm = printerType === 'thermal_58';
       const width = is58mm ? '58mm' : isThermal ? '80mm' : '210mm';
@@ -11289,7 +11355,7 @@
         </div>
       `;
 
-      w.document.write(`
+      openPrintDocument(`
         <!DOCTYPE html>
         <html>
           <head>
@@ -11302,8 +11368,7 @@
             ${content}
           </body>
         </html>
-      `);
-      w.document.close();
+      `, { autoClose: true, blockedMessage: 'Permite ventanas emergentes para imprimir el recibo' });
     }
 
     function generateFuelReceiptPDF(id) {
@@ -11513,7 +11578,7 @@
 
     function exportFuelExcel(mode = 'filtered') {
       if (!window.XLSX) {
-        showToast('No se pudo cargar la libreria de Excel. Revisa tu conexion e intenta de nuevo.', 'error');
+        showExcelLibraryError();
         return;
       }
       const totals = getFuelTotals();
