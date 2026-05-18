@@ -456,6 +456,132 @@
       }
     }
 
+    @media (max-width: 900px) {
+      html,
+      body,
+      #mainApp,
+      #mainContent {
+        width: 100%;
+        max-width: 100vw;
+        overflow-x: hidden;
+      }
+      #sidebar {
+        position: fixed !important;
+        left: 0;
+        top: 0;
+        width: min(78vw, 20rem) !important;
+        max-width: 78vw;
+        height: 100vh;
+        z-index: 40;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+      }
+      #sidebar.open {
+        transform: translateX(0);
+      }
+      #mobileToggle {
+        display: flex !important;
+      }
+      #mobileOverlay:not(.hidden) {
+        display: block !important;
+      }
+      #mainContent {
+        margin-left: 0 !important;
+        flex: 1 1 100%;
+      }
+      header.glass-strong {
+        padding: 0.8rem 1rem 0.8rem 4rem;
+        gap: 0.75rem;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+      header.glass-strong > div {
+        min-width: 0;
+      }
+      header.glass-strong > div:first-child {
+        flex: 1 1 12rem;
+      }
+      header.glass-strong > div:last-child {
+        flex: 1 1 100%;
+        justify-content: flex-start;
+        gap: 0.75rem;
+      }
+      #page-title {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+      }
+      #mainContent .p-6,
+      #mainContent .p-8 {
+        padding: 1rem !important;
+      }
+      #mainContent .grid {
+        min-width: 0;
+      }
+      #mainContent .grid.grid-cols-2,
+      #mainContent .grid.grid-cols-3,
+      #mainContent .grid.grid-cols-4,
+      #mainContent .grid.grid-cols-5,
+      #mainContent .grid.grid-cols-6,
+      #mainContent [class*="sm:grid-cols-"],
+      #mainContent [class*="md:grid-cols-"],
+      #mainContent [class*="lg:grid-cols-"],
+      #mainContent [class*="xl:grid-cols-"] {
+        grid-template-columns: minmax(0, 1fr) !important;
+      }
+      #mainContent .flex {
+        min-width: 0;
+      }
+      #mainContent .glass .flex,
+      #mainContent form .flex {
+        flex-wrap: wrap;
+      }
+      #mainContent .inline-flex,
+      #mainContent button {
+        max-width: 100%;
+        white-space: normal;
+      }
+      #mainContent input,
+      #mainContent select,
+      #mainContent textarea {
+        max-width: 100%;
+        font-size: 16px;
+      }
+      #mainContent .font-mono,
+      #mainContent .truncate {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+      #mainContent .text-2xl {
+        font-size: 1.3rem;
+        line-height: 1.7rem;
+      }
+      #mainContent .text-xl {
+        font-size: 1.1rem;
+        line-height: 1.5rem;
+      }
+      #mainContent [class*="min-w-"] {
+        min-width: 0 !important;
+      }
+      #mainContent .overflow-x-auto {
+        max-width: 100%;
+        overflow-x: auto;
+      }
+      #mainContent .data-table {
+        min-width: 680px !important;
+      }
+      #modalContent,
+      #modalContent > div,
+      #mainContent .max-w-lg,
+      #mainContent .max-w-xl,
+      #mainContent .max-w-2xl,
+      #mainContent .max-w-3xl,
+      #mainContent .max-w-4xl,
+      #mainContent .max-w-5xl {
+        max-width: calc(100vw - 1.5rem) !important;
+      }
+    }
+
   </style>
 <base target="_blank">
 <base target="_blank">
