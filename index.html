@@ -1737,13 +1737,33 @@
       return `FAC-${String(AppState.invoiceCounter).padStart(4, '0')}`;
     }
 
+    const CURRENCY_SYMBOL_OVERRIDES = {
+      DOP: 'RD$'
+    };
+
+    function formatCurrencyValue(value) {
+      const code = AppState.config.currency || 'MXN';
+      const amount = Number(value || 0);
+
+      try {
+        const parts = new Intl.NumberFormat('es-DO', {
+          style: 'currency',
+          currency: code,
+          currencyDisplay: 'narrowSymbol',
+          minimumFractionDigits: 2
+        }).formatToParts(amount);
+
+        return parts.map(part => part.type === 'currency' ? getCurrencySymbol(code) : part.value).join('');
+      } catch (error) {
+        return `${getCurrencySymbol(code)} ${amount.toLocaleString('es-DO', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        })}`;
+      }
+    }
+
     const fmt = {
-      currency: (n) => new Intl.NumberFormat('es-DO', {
-        style: 'currency',
-        currency: AppState.config.currency,
-        currencyDisplay: 'narrowSymbol',
-        minimumFractionDigits: 2
-      }).format(n || 0),
+      currency: (n) => formatCurrencyValue(n),
       number: (n, d = 1) => (n || 0).toLocaleString('es-MX', {
         minimumFractionDigits: d, maximumFractionDigits: d
       }),
@@ -5098,6 +5118,8 @@
     ];
 
     function getCurrencySymbol(code) {
+      if (CURRENCY_SYMBOL_OVERRIDES[code]) return CURRENCY_SYMBOL_OVERRIDES[code];
+
       try {
         const parts = new Intl.NumberFormat('es-DO', {
           style: 'currency',
