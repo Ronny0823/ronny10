@@ -340,8 +340,14 @@
       body {
         overflow-x: hidden;
       }
+      html,
+      body {
+        width: 100%;
+        max-width: 100%;
+      }
       #mainContent {
         width: 100%;
+        max-width: 100vw;
       }
       header.glass-strong {
         padding-left: 4rem;
@@ -364,6 +370,76 @@
       select,
       textarea {
         min-height: 44px;
+        max-width: 100%;
+      }
+      input,
+      select,
+      textarea {
+        font-size: 16px;
+      }
+      .grid {
+        min-width: 0;
+      }
+      [class*="min-w-"] {
+        min-width: 0 !important;
+      }
+      .data-table {
+        min-width: 720px !important;
+      }
+      .grid.grid-cols-2,
+      .grid.grid-cols-3,
+      .grid.grid-cols-4,
+      .grid.grid-cols-5,
+      .grid.grid-cols-6 {
+        grid-template-columns: minmax(0, 1fr) !important;
+      }
+      [class*="md:grid-cols-"],
+      [class*="lg:grid-cols-"],
+      [class*="sm:grid-cols-"] {
+        grid-template-columns: minmax(0, 1fr) !important;
+      }
+      .flex {
+        min-width: 0;
+      }
+      .glass,
+      .glass-strong,
+      form,
+      section,
+      article {
+        max-width: 100%;
+      }
+      .max-w-lg,
+      .max-w-xl,
+      .max-w-2xl,
+      .max-w-3xl,
+      .max-w-4xl,
+      .max-w-5xl {
+        max-width: calc(100vw - 1.5rem) !important;
+      }
+      .glass.p-6,
+      .glass.p-8,
+      .glass-strong.p-6,
+      .glass-strong.p-8 {
+        padding: 1rem !important;
+      }
+      .font-mono {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+      .text-2xl {
+        font-size: 1.35rem;
+        line-height: 1.75rem;
+      }
+      .text-xl {
+        font-size: 1.15rem;
+        line-height: 1.55rem;
+      }
+      .inline-flex,
+      button {
+        white-space: normal;
+      }
+      .overflow-x-auto {
+        max-width: 100%;
       }
       #toastContainer {
         left: 1rem;
