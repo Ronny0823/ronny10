@@ -1264,18 +1264,24 @@
       },
 
       download() {
-        const backup = this.snapshot();
-        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const date = new Date().toISOString().slice(0, 10);
-        a.href = url;
-        a.download = `respaldo_erp_${date}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showToast('Respaldo descargado correctamente');
+        try {
+          const backup = this.snapshot();
+          const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const date = new Date().toISOString().slice(0, 10);
+          a.href = url;
+          a.download = `respaldo_erp_${date}.json`;
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          showToast('Respaldo descargado correctamente');
+        } catch (error) {
+          console.error(error);
+          showToast('No se pudo descargar el respaldo', 'error');
+        }
       },
 
       importFile(event) {
