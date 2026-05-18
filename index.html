@@ -5115,10 +5115,7 @@
     function renderCurrencyOptions(selectedCurrency, searchTerm = '') {
       const selected = selectedCurrency || 'MXN';
       const query = String(searchTerm || '').trim().toLowerCase();
-      const matches = WORLD_CURRENCIES.filter(([code, name]) => {
-        if (!query) return true;
-        return code.toLowerCase().includes(query) || name.toLowerCase().includes(query);
-      });
+      const matches = getCurrencyMatches(query);
       const hasSelected = matches.some(([code]) => code === selected);
       const options = hasSelected ? matches : WORLD_CURRENCIES.filter(([code]) => code === selected).concat(matches);
 
@@ -5129,11 +5126,62 @@
       }).join('');
     }
 
+    function getCurrencyMatches(query) {
+      return WORLD_CURRENCIES.filter(([code, name]) => {
+        if (!query) return true;
+        return code.toLowerCase().includes(query) || name.toLowerCase().includes(query);
+      });
+    }
+
+    function renderCurrencySearchResults(searchTerm) {
+      const query = String(searchTerm || '').trim().toLowerCase();
+      if (!query) return '';
+
+      const matches = getCurrencyMatches(query).slice(0, 8);
+      if (!matches.length) {
+        return `<div class="px-3 py-2 text-sm text-slate-500">No se encontro esa moneda</div>`;
+      }
+
+      return matches.map(([code, name]) => {
+        const symbol = getCurrencySymbol(code);
+        return `
+          <button type="button" onclick="selectCurrencyResult('${code}')"
+            class="w-full px-3 py-2 text-left hover:bg-primary-500/10 text-slate-200 transition-colors flex items-center justify-between gap-3">
+            <span class="text-sm">${symbol} ${code} - ${name}</span>
+            <span class="text-xs text-primary-400">Seleccionar</span>
+          </button>
+        `;
+      }).join('');
+    }
+
     function filterCurrencyOptions(searchTerm) {
       const select = document.getElementById('configCurrency');
       if (!select) return;
       const selected = select.value || AppState.config.currency || 'MXN';
       select.innerHTML = renderCurrencyOptions(selected, searchTerm);
+
+      const results = document.getElementById('currencySearchResults');
+      if (results) {
+        const html = renderCurrencySearchResults(searchTerm);
+        results.innerHTML = html;
+        results.classList.toggle('hidden', !html);
+      }
+    }
+
+    function selectCurrencyResult(code) {
+      const select = document.getElementById('configCurrency');
+      const search = document.getElementById('currencySearch');
+      const results = document.getElementById('currencySearchResults');
+      const match = WORLD_CURRENCIES.find(([currencyCode]) => currencyCode === code);
+      if (!select || !match) return;
+
+      select.innerHTML = renderCurrencyOptions(code);
+      select.value = code;
+      if (search) search.value = `${getCurrencySymbol(code)} ${code} - ${match[1]}`;
+      if (results) {
+        results.innerHTML = '';
+        results.classList.add('hidden');
+      }
     }
 
     function renderSettings(container) {
@@ -5329,6 +5377,8 @@
                   <i data-lucide="search" class="w-4 h-4 text-slate-500 absolute left-3 top-3.5"></i>
                   <input type="text" id="currencySearch" oninput="filterCurrencyOptions(this.value)" placeholder="Buscar moneda por nombre o codigo..."
                     class="w-full pl-9 pr-3 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-200 text-sm input-focus">
+                  <div id="currencySearchResults"
+                    class="hidden absolute z-30 mt-2 w-full max-h-64 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 shadow-2xl"></div>
                 </div>
                 <select id="configCurrency"
                   class="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-200 input-focus select-custom">
