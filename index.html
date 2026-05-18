@@ -1738,8 +1738,11 @@
     }
 
     const fmt = {
-      currency: (n) => new Intl.NumberFormat('es-MX', {
-        style: 'currency', currency: AppState.config.currency, minimumFractionDigits: 2
+      currency: (n) => new Intl.NumberFormat('es-DO', {
+        style: 'currency',
+        currency: AppState.config.currency,
+        currencyDisplay: 'narrowSymbol',
+        minimumFractionDigits: 2
       }).format(n || 0),
       number: (n, d = 1) => (n || 0).toLocaleString('es-MX', {
         minimumFractionDigits: d, maximumFractionDigits: d
@@ -4038,7 +4041,7 @@
       const content = isThermal ? `
         <div class="center bold" style="font-size: 14px;">${AppState.config.company_name}</div>
         <div class="center" style="font-size: 10px;">${AppState.config.company_slogan}</div>
-        ${AppState.config.company_rfc ? `<div class="center" style="font-size: 9px;">RFC: ${AppState.config.company_rfc}</div>` : ''}
+        ${AppState.config.company_rfc ? `<div class="center" style="font-size: 9px;">RNC: ${AppState.config.company_rfc}</div>` : ''}
         <div class="line"></div>
         <div class="center bold">${receiptTitle}</div>
         ${isFullPayment ? '<div class="center full-payment">LIQUIDACIÓN COMPLETA</div>' : '<div class="center partial-payment">ABONO PARCIAL</div>'}
@@ -4939,6 +4942,184 @@
     }
     
 
+    const WORLD_CURRENCIES = [
+      ['AED', 'Dirham de Emiratos Arabes Unidos'],
+      ['AFN', 'Afgani afgano'],
+      ['ALL', 'Lek albanes'],
+      ['AMD', 'Dram armenio'],
+      ['ANG', 'Florin antillano neerlandes'],
+      ['AOA', 'Kwanza angoleno'],
+      ['ARS', 'Peso argentino'],
+      ['AUD', 'Dolar australiano'],
+      ['AWG', 'Florin arubano'],
+      ['AZN', 'Manat azerbaiyano'],
+      ['BAM', 'Marco convertible bosnio'],
+      ['BBD', 'Dolar de Barbados'],
+      ['BDT', 'Taka bangladesi'],
+      ['BGN', 'Lev bulgaro'],
+      ['BHD', 'Dinar bareini'],
+      ['BIF', 'Franco burundes'],
+      ['BMD', 'Dolar bermudeno'],
+      ['BND', 'Dolar de Brunei'],
+      ['BOB', 'Boliviano'],
+      ['BRL', 'Real brasileno'],
+      ['BSD', 'Dolar bahameno'],
+      ['BTN', 'Ngultrum butanes'],
+      ['BWP', 'Pula botsuano'],
+      ['BYN', 'Rublo bielorruso'],
+      ['BZD', 'Dolar beliceno'],
+      ['CAD', 'Dolar canadiense'],
+      ['CDF', 'Franco congoles'],
+      ['CHF', 'Franco suizo'],
+      ['CLP', 'Peso chileno'],
+      ['CNY', 'Yuan chino'],
+      ['COP', 'Peso colombiano'],
+      ['CRC', 'Colon costarricense'],
+      ['CUP', 'Peso cubano'],
+      ['CVE', 'Escudo caboverdiano'],
+      ['CZK', 'Corona checa'],
+      ['DJF', 'Franco yibutiano'],
+      ['DKK', 'Corona danesa'],
+      ['DOP', 'Peso dominicano'],
+      ['DZD', 'Dinar argelino'],
+      ['EGP', 'Libra egipcia'],
+      ['ERN', 'Nakfa eritreo'],
+      ['ETB', 'Birr etiope'],
+      ['EUR', 'Euro'],
+      ['FJD', 'Dolar fiyiano'],
+      ['FKP', 'Libra malvinense'],
+      ['GBP', 'Libra esterlina'],
+      ['GEL', 'Lari georgiano'],
+      ['GHS', 'Cedi ghanes'],
+      ['GIP', 'Libra gibraltarena'],
+      ['GMD', 'Dalasi gambiano'],
+      ['GNF', 'Franco guineano'],
+      ['GTQ', 'Quetzal guatemalteco'],
+      ['GYD', 'Dolar guyanes'],
+      ['HKD', 'Dolar de Hong Kong'],
+      ['HNL', 'Lempira hondureno'],
+      ['HTG', 'Gourde haitiano'],
+      ['HUF', 'Forinto hungaro'],
+      ['IDR', 'Rupia indonesia'],
+      ['ILS', 'Nuevo shekel israeli'],
+      ['INR', 'Rupia india'],
+      ['IQD', 'Dinar iraqui'],
+      ['IRR', 'Rial irani'],
+      ['ISK', 'Corona islandesa'],
+      ['JMD', 'Dolar jamaicano'],
+      ['JOD', 'Dinar jordano'],
+      ['JPY', 'Yen japones'],
+      ['KES', 'Chelin keniano'],
+      ['KGS', 'Som kirguis'],
+      ['KHR', 'Riel camboyano'],
+      ['KMF', 'Franco comorense'],
+      ['KRW', 'Won surcoreano'],
+      ['KWD', 'Dinar kuwaiti'],
+      ['KYD', 'Dolar caiman'],
+      ['KZT', 'Tenge kazajo'],
+      ['LAK', 'Kip laosiano'],
+      ['LBP', 'Libra libanesa'],
+      ['LKR', 'Rupia esrilanquesa'],
+      ['LRD', 'Dolar liberiano'],
+      ['LSL', 'Loti lesotense'],
+      ['LYD', 'Dinar libio'],
+      ['MAD', 'Dirham marroqui'],
+      ['MDL', 'Leu moldavo'],
+      ['MGA', 'Ariary malgache'],
+      ['MKD', 'Denar macedonio'],
+      ['MMK', 'Kyat birmano'],
+      ['MNT', 'Tugrik mongol'],
+      ['MOP', 'Pataca macaense'],
+      ['MRU', 'Uguiya mauritana'],
+      ['MUR', 'Rupia mauriciana'],
+      ['MVR', 'Rufiyaa maldiva'],
+      ['MWK', 'Kwacha malaui'],
+      ['MXN', 'Peso mexicano'],
+      ['MYR', 'Ringgit malasio'],
+      ['MZN', 'Metical mozambiqueno'],
+      ['NAD', 'Dolar namibio'],
+      ['NGN', 'Naira nigeriana'],
+      ['NIO', 'Cordoba nicaraguense'],
+      ['NOK', 'Corona noruega'],
+      ['NPR', 'Rupia nepali'],
+      ['NZD', 'Dolar neozelandes'],
+      ['OMR', 'Rial omani'],
+      ['PAB', 'Balboa panameno'],
+      ['PEN', 'Sol peruano'],
+      ['PGK', 'Kina papuana'],
+      ['PHP', 'Peso filipino'],
+      ['PKR', 'Rupia pakistani'],
+      ['PLN', 'Zloty polaco'],
+      ['PYG', 'Guarani paraguayo'],
+      ['QAR', 'Riyal qatari'],
+      ['RON', 'Leu rumano'],
+      ['RSD', 'Dinar serbio'],
+      ['RUB', 'Rublo ruso'],
+      ['RWF', 'Franco ruandes'],
+      ['SAR', 'Riyal saudi'],
+      ['SBD', 'Dolar salomonense'],
+      ['SCR', 'Rupia seychellense'],
+      ['SDG', 'Libra sudanesa'],
+      ['SEK', 'Corona sueca'],
+      ['SGD', 'Dolar singapurense'],
+      ['SHP', 'Libra de Santa Elena'],
+      ['SLE', 'Leone sierraleones'],
+      ['SOS', 'Chelin somali'],
+      ['SRD', 'Dolar surinames'],
+      ['STN', 'Dobra santotomense'],
+      ['SYP', 'Libra siria'],
+      ['SZL', 'Lilangeni suazi'],
+      ['THB', 'Baht tailandes'],
+      ['TJS', 'Somoni tayiko'],
+      ['TMT', 'Manat turcomano'],
+      ['TND', 'Dinar tunecino'],
+      ['TOP', 'Paanga tongano'],
+      ['TRY', 'Lira turca'],
+      ['TTD', 'Dolar trinitense'],
+      ['TWD', 'Nuevo dolar taiwanes'],
+      ['TZS', 'Chelin tanzano'],
+      ['UAH', 'Grivna ucraniana'],
+      ['UGX', 'Chelin ugandes'],
+      ['USD', 'Dolar estadounidense'],
+      ['UYU', 'Peso uruguayo'],
+      ['UZS', 'Som uzbeko'],
+      ['VES', 'Bolivar venezolano'],
+      ['VND', 'Dong vietnamita'],
+      ['VUV', 'Vatu vanuatuense'],
+      ['WST', 'Tala samoano'],
+      ['XAF', 'Franco CFA de Africa Central'],
+      ['XCD', 'Dolar del Caribe Oriental'],
+      ['XOF', 'Franco CFA de Africa Occidental'],
+      ['XPF', 'Franco CFP'],
+      ['YER', 'Rial yemeni'],
+      ['ZAR', 'Rand sudafricano'],
+      ['ZMW', 'Kwacha zambiano'],
+      ['ZWL', 'Dolar zimbabuense']
+    ];
+
+    function getCurrencySymbol(code) {
+      try {
+        const parts = new Intl.NumberFormat('es-DO', {
+          style: 'currency',
+          currency: code,
+          currencyDisplay: 'narrowSymbol',
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }).formatToParts(0);
+        return parts.find(part => part.type === 'currency')?.value || code;
+      } catch (error) {
+        return code;
+      }
+    }
+
+    function renderCurrencyOptions(selectedCurrency) {
+      const selected = selectedCurrency || 'MXN';
+      return WORLD_CURRENCIES.map(([code, name]) => {
+        const isSelected = code === selected ? 'selected' : '';
+        return `<option value="${code}" ${isSelected}>${getCurrencySymbol(code)} ${code} - ${name}</option>`;
+      }).join('');
+    }
+
     function renderSettings(container) {
       const stats = {
         materials: getRecords('material').length,
@@ -5026,8 +5207,8 @@
                   class="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-200 input-focus">
               </div>
               <div>
-                <label class="block text-sm font-medium text-slate-400 mb-2">RFC</label>
-                <input type="text" id="configRFC" value="${AppState.config.company_rfc}" placeholder="XAXX010101000"
+                  <label class="block text-sm font-medium text-slate-400 mb-2">RNC</label>
+                  <input type="text" id="configRFC" value="${AppState.config.company_rfc}" placeholder="000000000"
                   class="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-200 font-mono input-focus uppercase">
               </div>
               <div class="md:col-span-2">
@@ -5130,9 +5311,7 @@
                 <label class="block text-sm font-medium text-slate-400 mb-2">Moneda</label>
                 <select id="configCurrency"
                   class="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-200 input-focus select-custom">
-                  <option value="MXN" ${AppState.config.currency === 'MXN' ? 'selected' : ''}>🇲🇽 Peso Mexicano (MXN)</option>
-                  <option value="USD" ${AppState.config.currency === 'USD' ? 'selected' : ''}>🇺🇸 Dólar (USD)</option>
-                  <option value="EUR" ${AppState.config.currency === 'EUR' ? 'selected' : ''}>🇪🇺 Euro (EUR)</option>
+                  ${renderCurrencyOptions(AppState.config.currency)}
                 </select>
               </div>
             </div>
@@ -5701,7 +5880,7 @@
           '\x1bE\x01' + center(AppState.config.company_name || '') + '\x1bE\x00',
           '\x1d!\x00',
           center(AppState.config.company_slogan || ''),
-          AppState.config.company_rfc ? center('RFC: ' + AppState.config.company_rfc) : '',
+      AppState.config.company_rfc ? center('RNC: ' + AppState.config.company_rfc) : '',
           thickLine,
           '\x1bE\x01FACTURA\x1bE\x00',
           center(invoice.invoice_number || ''),
@@ -5803,7 +5982,7 @@
           '\x1bE\x01' + h.center(AppState.config.company_name || '') + '\x1bE\x00',
           '\x1d!\x00',
           h.center(AppState.config.company_slogan || ''),
-          AppState.config.company_rfc ? h.center('RFC: ' + AppState.config.company_rfc) : '',
+      AppState.config.company_rfc ? h.center('RNC: ' + AppState.config.company_rfc) : '',
           h.thickLine,
           '\x1bE\x01' + h.center(title) + '\x1bE\x00',
           subtitle ? h.center(subtitle) : '',
@@ -6250,7 +6429,7 @@
         if (AppState.config.company_rfc) {
           doc.setFontSize(6);
           doc.setFont(undefined, 'bold');
-          doc.text(`RFC: ${AppState.config.company_rfc}`, pageWidth/2, yPos, { align: 'center' });
+        doc.text(`RNC: ${AppState.config.company_rfc}`, pageWidth/2, yPos, { align: 'center' });
           doc.setFont(undefined, 'normal');
           yPos += 3;
         }
@@ -6339,7 +6518,7 @@
 
         if (AppState.config.company_rfc) {
           doc.setFontSize(8);
-          doc.text(`RFC: ${AppState.config.company_rfc}`, pageWidth/2, yPos, { align: 'center' });
+        doc.text(`RNC: ${AppState.config.company_rfc}`, pageWidth/2, yPos, { align: 'center' });
           yPos += 4;
         }
 
@@ -6697,7 +6876,7 @@
         ${logoSection}
         <div class="center bold" style="font-size: 14px;">${AppState.config.company_name}</div>
         <div class="center">${AppState.config.company_slogan}</div>
-        ${AppState.config.company_rfc ? `<div class="center" style="font-size: 9px;">RFC: ${AppState.config.company_rfc}</div>` : ''}
+        ${AppState.config.company_rfc ? `<div class="center" style="font-size: 9px;">RNC: ${AppState.config.company_rfc}</div>` : ''}
         <div class="line"></div>
         <div class="center bold">FACTURA</div>
         <div class="center">${invoice.invoice_number}</div>
@@ -6738,7 +6917,7 @@
           ${logoSection}
           <div class="company">${AppState.config.company_name}</div>
           <div>${AppState.config.company_slogan}</div>
-          ${AppState.config.company_rfc ? `<div style="margin-top: 10px;">RFC: ${AppState.config.company_rfc}</div>` : ''}
+          ${AppState.config.company_rfc ? `<div style="margin-top: 10px;">RNC: ${AppState.config.company_rfc}</div>` : ''}
           ${AppState.config.company_address ? `<div style="font-size: 11px; margin-top: 5px;">${AppState.config.company_address}</div>` : ''}
         </div>
 
@@ -7585,7 +7764,7 @@
           <div class="header">
             <div class="company">${AppState.config.company_name}</div>
             <div>${AppState.config.company_slogan || ''}</div>
-            ${AppState.config.company_rfc ? `<div class="muted">RFC: ${AppState.config.company_rfc}</div>` : ''}
+            ${AppState.config.company_rfc ? `<div class="muted">RNC: ${AppState.config.company_rfc}</div>` : ''}
           </div>
           <div class="meta">
             <div>
@@ -10217,7 +10396,7 @@
         if (AppState.config.company_rfc) {
           doc.setFontSize(6);
           doc.setFont(undefined, 'bold');
-          doc.text('RFC: ' + AppState.config.company_rfc, pageWidth/2, yPos, { align: 'center' });
+        doc.text('RNC: ' + AppState.config.company_rfc, pageWidth/2, yPos, { align: 'center' });
           doc.setFont(undefined, 'normal');
           yPos += 3;
         }
@@ -10314,7 +10493,7 @@
         yPos += 5;
         if (AppState.config.company_rfc) {
           doc.setFontSize(8);
-          doc.text('RFC: ' + AppState.config.company_rfc, pageWidth/2, yPos, { align: 'center' });
+        doc.text('RNC: ' + AppState.config.company_rfc, pageWidth/2, yPos, { align: 'center' });
           yPos += 4;
         }
         yPos += 2;
@@ -11527,7 +11706,7 @@
         ${logoSection}
         <div class="center bold" style="font-size: 14px;">${fuelSafe(AppState.config.company_name)}</div>
         <div class="center muted">${fuelSafe(AppState.config.company_slogan)}</div>
-        ${AppState.config.company_rfc ? `<div class="center muted">RFC: ${fuelSafe(AppState.config.company_rfc)}</div>` : ''}
+      ${AppState.config.company_rfc ? `<div class="center muted">RNC: ${fuelSafe(AppState.config.company_rfc)}</div>` : ''}
         <div class="line"></div>
         <div class="center bold">RECIBO DESPACHO GASOL</div>
         <div class="center muted">${r.__backendId.replace('fuel_dispatch_', 'GAS-')}</div>
@@ -11549,7 +11728,7 @@
           ${logoSection}
           <div class="company">${fuelSafe(AppState.config.company_name)}</div>
           <div>${fuelSafe(AppState.config.company_slogan)}</div>
-          ${AppState.config.company_rfc ? `<div style="margin-top: 8px;">RFC: ${fuelSafe(AppState.config.company_rfc)}</div>` : ''}
+      ${AppState.config.company_rfc ? `<div style="margin-top: 8px;">RNC: ${fuelSafe(AppState.config.company_rfc)}</div>` : ''}
           ${AppState.config.company_address ? `<div style="font-size: 11px; margin-top: 5px;">${fuelSafe(AppState.config.company_address)}</div>` : ''}
         </div>
         <div style="display:flex;justify-content:space-between;gap:24px;margin-bottom:20px;">
@@ -11655,7 +11834,7 @@
         if (AppState.config.company_rfc) {
           doc.setFontSize(6);
           doc.setFont(undefined, 'bold');
-          doc.text('RFC: ' + AppState.config.company_rfc, pageWidth / 2, yPos, { align: 'center' });
+        doc.text('RNC: ' + AppState.config.company_rfc, pageWidth / 2, yPos, { align: 'center' });
           doc.setFont(undefined, 'normal');
           yPos += 3;
         }
@@ -11735,7 +11914,7 @@
         yPos += 5;
         if (AppState.config.company_rfc) {
           doc.setFontSize(8);
-          doc.text('RFC: ' + AppState.config.company_rfc, pageWidth / 2, yPos, { align: 'center' });
+        doc.text('RNC: ' + AppState.config.company_rfc, pageWidth / 2, yPos, { align: 'center' });
           yPos += 4;
         }
         yPos += 2;
